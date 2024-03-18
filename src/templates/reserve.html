@@ -1,0 +1,24 @@
+
+<div>
+
+    {{#has_error}}
+        <h4 style="color:red">Attempt failed</h4>
+        {{#error_tx_not_found}}
+            <h4>Reserve data not found. </h4>
+        {{/error_tx_not_found}}
+    {{/has_error}}
+    {{^has_error}}
+        <table class="center" style="width:auto">
+            <tr>
+                <td><b>CURRENCY</b></td>
+                <td><b>AMOUNT</b></td>
+            </tr>
+            {{#currencies}}
+                <tr>
+                    <td style="text-align:left">{{currency_label}}</td>
+                    <td style="text-align:right">{{amount}}</td>
+                </tr>
+            {{/currencies}}
+        </table>
+    {{/has_error}}
+</div>

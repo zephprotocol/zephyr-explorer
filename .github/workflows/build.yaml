@@ -1,0 +1,93 @@
+name: linux-229-cli
+
+on: [push, pull_request]
+
+jobs:
+  build-linux-explorer-glibc-2-29:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: remove bundled boost
+        run: sudo rm -rf /usr/local/share/boost
+      - name: Install Zephyr dependencies
+        run: |
+          sudo apt update
+          sudo apt-get --no-install-recommends --yes install wget libcurl4-openssl-dev libzmq5 libzmq3-dev build-essential cmake pkg-config libssl-dev libunbound-dev libsodium-dev liblzma-dev libreadline6-dev libldns-dev libexpat1-dev doxygen graphviz libpgm-dev libudev-dev
+      - name: install boost 1.77
+        run: |
+          wget https://boostorg.jfrog.io/artifactory/main/release/1.77.0/source/boost_1_77_0.tar.gz
+          tar -xvf boost_1_77_0.tar.gz
+          cd boost_1_77_0
+          ./bootstrap.sh
+          sudo ./b2 install -j2
+      - name: build Zephyr
+        run: |
+          mkdir src/haven-main/build/Linux/master/release/ -p
+          cd src/haven-main/build/Linux/master/release/
+          cmake -D CMAKE_BUILD_TYPE=Release ../../../..
+          cmake --build . --target wallet --
+          cmake --build . --target daemonizer --
+          cmake --build . --target cryptonote_protocol --
+      - name: Build Zephyr Explorer
+        run: |
+          mkdir build -p
+          cd build
+          cmake -DMONERO_DIR=$PWD/../src/haven-main ..
+          make -j2
+      - name: package haven explorer
+        run: |
+          cd build/
+          tar -czvf haven-linux-explorer-glibc229.tar.gz xmrblocks templates
+      - uses: actions/upload-artifact@v2
+        with:
+          name: haven-linux-explorer-glibc229.tar.gz
+          path: build/haven-linux-explorer-glibc229.tar.gz
+          retention-days: 10
+
+  upload-linux-explorer-glibc-2-29:
+    needs: build-linux-explorer-glibc-2-29
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: haven-linux-explorer-glibc229.tar.gz
+      - name: Upload Zephyr CLI
+        uses: shallwefootball/s3-upload-action@master
+        with:
+          aws_key_id: ${{ secrets.AWS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_bucket: ${{ secrets.AWS_BUCKET }}
+          source_dir: "./"
+          destination_dir: binaries/${{github.ref_name}}
+      - name: notification
+        env:
+          BINARY_NAME: /haven-linux-explorer-glibc229.tar.gz
+          BINARY_URL: https://docs.havenprotocol.org/binaries/
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        shell: bash
+        run: |
+          export checksum=($(sha256sum haven-linux-explorer-glibc229.tar.gz))
+          export payload='{"username": "Github", "content": "Explorer (Linux 2.29) : '${BINARY_URL}${GITHUB_REF_NAME}${BINARY_NAME}' (sha256 checksum : '${checksum}')"}'
+          echo $payload
+          curl -X POST -H "Content-Type: application/json" -d "$payload" $DISCORD_WEBHOOK
+
+  publish-linux-explorer-glibc-2-29:
+    needs: build-linux-explorer-glibc-2-29
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: haven-linux-explorer-glibc229.tar.gz
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: haven-linux-explorer-glibc229.tar.gz
+          asset_name: haven-linux-explorer-glibc229.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+          body: ""
+          prerelease: true

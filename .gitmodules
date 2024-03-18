@@ -1,0 +1,3 @@
+[submodule "src/zephyr"]
+	path = src/zephyr
+	url = ssh://git@github.com-zephyr:ZephyrProtocol/zephyr
